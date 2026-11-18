@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Equation Maker</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --ink: #1d2330; --muted: #616b7c;
+    --line: #dde1e8; --accent: #2b6cd8; --accent-ink: #fff; --chip: #eef1f6; --chip-hover: #e1e7f1;
+    --error: #b3261e;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 980px; margin: 0 auto; padding: 20px 16px 48px; }
+  h1 { font-size: 22px; margin: 4px 0 2px; }
+  .sub { color: var(--muted); margin: 0 0 18px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; margin-bottom: 14px; }
+  .panel h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 0 0 10px; }
+  math-field { display: block; width: 100%; font-size: 30px; padding: 10px 12px; min-height: 70px;
+    border: 2px solid var(--line); border-radius: 8px; background: #fff; }
+  math-field:focus-within { border-color: var(--accent); outline: none; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 8px; }
+  .tab { border: 0; background: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; color: var(--muted); font: inherit; }
+  .tab[aria-selected="true"] { background: var(--chip); color: var(--ink); font-weight: 600; }
+  .palette { display: flex; flex-wrap: wrap; gap: 6px; }
+  .palette button { min-width: 44px; height: 40px; padding: 0 10px; border: 1px solid var(--line); background: var(--chip);
+    border-radius: 6px; cursor: pointer; font: 17px "Times New Roman", Georgia, serif; color: var(--ink); }
+  .palette button:hover { background: var(--chip-hover); }
+  .palette.formulas button { font-size: 15px; }
+  .hint { color: var(--muted); font-size: 13px; margin: 10px 0 0; }
+  kbd { background: var(--chip); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; font-size: 12px; }
+  details summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+  textarea { width: 100%; margin-top: 8px; font: 14px ui-monospace, Menlo, Consolas, monospace; padding: 8px;
+    border: 1px solid var(--line); border-radius: 6px; resize: vertical; min-height: 60px; }
+  .preview { min-height: 140px; display: flex; align-items: center; justify-content: center; overflow: auto;
+    border-radius: 8px; padding: 16px;
+    background-color: #fff;
+    background-image: linear-gradient(45deg, #f1f3f6 25%, transparent 25%), linear-gradient(-45deg, #f1f3f6 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #f1f3f6 75%), linear-gradient(-45deg, transparent 75%, #f1f3f6 75%);
+    background-size: 20px 20px; background-position: 0 0, 0 10px, 10px -10px, -10px 0; }
+  .preview svg { max-width: 100%; height: auto; }
+  .preview .empty { color: var(--muted); }
+  .preview .err { color: var(--error); }
+  label.opt { display: flex; gap: 6px; align-items: center; font-size: 14px; color: var(--muted); }
+  select, input[type=color] { font: inherit; }
+  input[type=color] { width: 38px; height: 30px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: none; }
+  .actions { margin-top: 12px; }
+  .btn { border: 1px solid var(--line); background: #fff; color: var(--ink); padding: 9px 14px; border-radius: 8px;
+    cursor: pointer; font: inherit; font-weight: 600; }
+  .btn:hover { background: var(--chip); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .btn.primary:hover { filter: brightness(1.08); }
+  .btn:disabled { opacity: .5; cursor: default; }
+  #toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: #1d2330; color: #fff;
+    padding: 10px 16px; border-radius: 8px; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: 90vw; }
+  #toast.show { opacity: 1; }
+  .history { display: flex; flex-wrap: wrap; gap: 8px; }
+  .history button { border: 1px solid var(--line); background: #fff; border-radius: 8px; padding: 6px 10px; cursor: pointer;
+    max-width: 100%; overflow: hidden; }
+  .history button svg { max-height: 36px; width: auto; max-width: 260px; }
+  .history button:hover { border-color: var(--accent); }
+  .howto ol { margin: 6px 0 0; padding-left: 20px; }
+  .howto li { margin-bottom: 4px; }
+</style>
+<script>
+  // MathJax config: SVG output that is fully self-contained (no shared glyph cache).
+  window.MathJax = {
+    loader: { load: ['[tex]/cancel', '[tex]/color'] },
+    tex: { packages: { '[+]': ['cancel', 'color'] }, macros: { degree: '{}^{\\circ}' } },
+    svg: { fontCache: 'none' },
+    startup: { typeset: false }
+  };
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg.js"></script>
+</head>
+<body>
+<main>
+  <h1>Equation Maker</h1>
+  <p class="sub">Type an equation, then download it as a crisp image for your slides.</p>
+
+  <section class="panel">
+    <h2>Equation</h2>
+    <math-field id="mf" aria-label="Equation editor"></math-field>
+    <p class="hint">
+      Type naturally: <kbd>/</kbd> makes a fraction, <kbd>^</kbd> an exponent, <kbd>_</kbd> a subscript,
+      <kbd>→</kbd> leaves a box. Typing <kbd>sqrt</kbd>, <kbd>Delta</kbd>, <kbd>lambda</kbd>, <kbd>pi</kbd>, <kbd>times</kbd> also works.
+    </p>
+    <details>
+      <summary>Edit as LaTeX</summary>
+      <textarea id="latex" spellcheck="false" aria-label="LaTeX source"></textarea>
+    </details>
+  </section>
+
+  <section class="panel">
+    <div class="tabs" role="tablist" id="tabs"></div>
+    <div id="palette" class="palette"></div>
+  </section>
+
+  <section class="panel">
+    <h2>Preview</h2>
+    <div id="preview" class="preview"><span class="empty">Your equation will appear here.</span></div>
+    <div class="row actions">
+      <label class="opt">Color <input type="color" id="color" value="#000000"></label>
+      <label class="opt">Size
+        <select id="size">
+          <option value="32">Small</option>
+          <option value="48" selected>Medium</option>
+          <option value="72">Large</option>
+          <option value="110">Extra large</option>
+        </select>
+      </label>
+      <label class="opt">PNG sharpness
+        <select id="scale">
+          <option value="2">2×</option>
+          <option value="4" selected>4× (recommended)</option>
+          <option value="8">8×</option>
+        </select>
+      </label>
+    </div>
+    <div class="row actions">
+      <button class="btn primary" id="copyPng">Copy image (paste into Slides)</button>
+      <button class="btn" id="dlPng">Download PNG</button>
+      <button class="btn" id="dlSvg">Download SVG</button>
+      <button class="btn" id="copyLatex">Copy LaTeX</button>
+    </div>
+  </section>
+
+  <section class="panel" id="historyPanel" hidden>
+    <h2>Recent equations <button class="tab" id="clearHistory" style="float:right;font-size:12px">Clear</button></h2>
+    <div id="history" class="history"></div>
+  </section>
+
+  <section class="panel howto">
+    <h2>Getting it into Google Slides</h2>
+    <ol>
+      <li><b>Fastest:</b> click <b>Copy image</b>, then click in your slide and press <kbd>Ctrl</kbd>+<kbd>V</kbd> (<kbd>⌘</kbd>+<kbd>V</kbd> on Mac).</li>
+      <li><b>Or:</b> click <b>Download PNG</b>, then in Slides choose <i>Insert → Image → Upload from computer</i>.</li>
+      <li>Google Slides doesn't accept SVG files, so use the PNG there. The PNG is rendered at high resolution with a transparent background, so it stays sharp when you resize it.</li>
+      <li>The <b>SVG</b> download is for apps that support it (PowerPoint, Keynote, Word, Canva, websites).</li>
+    </ol>
+  </section>
+</main>
+<div id="toast" role="status"></div>
+<!-- Bare package URL (no file name) so MathLive can find its fonts next to it on the CDN. -->
+<script src="https://cdn.jsdelivr.net/npm/mathlive@0.108.2"></script>
+
+<script>
+(() => {
+  // ---------- Palette ----------
+  // #@ = current selection/previous item, #0 = selection, #? = empty box to fill in
+  const GROUPS = {
+    'Structures': [
+      ['a/b', '\\frac{#@}{#?}', 'Fraction'],
+      ['x²', '#@^{#?}', 'Exponent'],
+      ['x₂', '#@_{#?}', 'Subscript'],
+      ['√x', '\\sqrt{#0}', 'Square root'],
+      ['ⁿ√x', '\\sqrt[#?]{#0}', 'Nth root'],
+      ['( )', '\\left(#0\\right)', 'Parentheses'],
+      ['[ ]', '\\left[#0\\right]', 'Brackets'],
+      ['|x|', '\\left|#0\\right|', 'Absolute value'],
+      ['vec', '\\vec{#0}', 'Vector arrow'],
+      ['x̄', '\\overline{#0}', 'Bar / average'],
+      ['×10ⁿ', '\\times10^{#?}', 'Scientific notation'],
+      ['text', '\\text{#?}', 'Plain words'],
+    ],
+    'Symbols': [
+      ['×', '\\times'], ['÷', '\\div'], ['·', '\\cdot'], ['±', '\\pm'], ['=', '='], ['≈', '\\approx'],
+      ['≠', '\\ne'], ['<', '<'], ['>', '>'], ['≤', '\\le'], ['≥', '\\ge'], ['∝', '\\propto'],
+      ['°', '^{\\circ}', 'Degree'], ['°C', '\\,\\mathrm{°C}'], ['∞', '\\infty'],
+      ['→', '\\rightarrow', 'Yields'], ['⇌', '\\rightleftharpoons', 'Equilibrium'], ['↑', '\\uparrow'], ['↓', '\\downarrow'],
+      ['∑', '\\sum'], ['%', '\\%'],
+    ],
+    'Units': [
+      ...['m', 's', 'kg', 'g', 'N', 'J', 'W', 'Pa', 'K', 'mol', 'V', 'A', 'Hz', 'L', 'mL', 'cm']
+        .map(u => [u, `\\,\\mathrm{${u}}`]),
+      ['Ω', '\\,\\Omega'],
+      ['°C', '\\,\\mathrm{°C}'],
+      ['m/s', '\\,\\mathrm{m}/\\mathrm{s}'],
+      ['m/s²', '\\,\\mathrm{m}/\\mathrm{s}^{2}'],
+      ['kg·m/s', '\\,\\mathrm{kg}\\cdot\\mathrm{m}/\\mathrm{s}'],
+      ['g/cm³', '\\,\\mathrm{g}/\\mathrm{cm}^{3}'],
+      ['kg/m³', '\\,\\mathrm{kg}/\\mathrm{m}^{3}'],
+      ['J/(kg·°C)', '\\,\\mathrm{J}/(\\mathrm{kg}\\cdot\\mathrm{°C})'],
+      ['other…', '\\,\\mathrm{#?}', 'Type your own unit in upright letters'],
+    ],
+    'Greek': [
+      ['Δ', '\\Delta'], ['α', '\\alpha'], ['β', '\\beta'], ['γ', '\\gamma'], ['δ', '\\delta'], ['ε', '\\varepsilon'],
+      ['θ', '\\theta'], ['λ', '\\lambda'], ['μ', '\\mu'], ['ν', '\\nu'], ['π', '\\pi'], ['ρ', '\\rho'],
+      ['σ', '\\sigma'], ['τ', '\\tau'], ['φ', '\\varphi'], ['ω', '\\omega'], ['Ω', '\\Omega'], ['Σ', '\\Sigma'],
+    ],
+    'Formulas': [
+      ['v = d/t', 'v=\\frac{d}{t}'],
+      ['a = Δv/t', 'a=\\frac{\\Delta v}{t}'],
+      ['F = ma', 'F=ma'],
+      ['W = mg', 'W=mg'],
+      ['p = mv', 'p=mv'],
+      ['ρ = m/V', '\\rho=\\frac{m}{V}'],
+      ['KE = ½mv²', 'KE=\\frac{1}{2}mv^{2}'],
+      ['PE = mgh', 'PE=mgh'],
+      ['W = Fd', 'W=Fd'],
+      ['P = W/t', 'P=\\frac{W}{t}'],
+      ['V = IR', 'V=IR'],
+      ['P = IV', 'P=IV'],
+      ['v = fλ', 'v=f\\lambda'],
+      ['Q = mcΔT', 'Q=mc\\Delta T'],
+      ['Gravity', 'F_{g}=G\\frac{m_{1}m_{2}}{r^{2}}'],
+      ['Efficiency', '\\text{efficiency}=\\frac{\\text{useful output}}{\\text{total input}}\\times100\\%'],
+      ['2H₂ + O₂ → 2H₂O', '2\\mathrm{H}_{2}+\\mathrm{O}_{2}\\rightarrow2\\mathrm{H}_{2}\\mathrm{O}'],
+    ],
+  };
+
+  const mf = document.getElementById('mf');
+  const latexBox = document.getElementById('latex');
+  const preview = document.getElementById('preview');
+  const colorIn = document.getElementById('color');
+  const sizeIn = document.getElementById('size');
+  const scaleIn = document.getElementById('scale');
+  const toastEl = document.getElementById('toast');
+  const tabsEl = document.getElementById('tabs');
+  const paletteEl = document.getElementById('palette');
+
+  function toast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(toast.t);
+    toast.t = setTimeout(() => toastEl.classList.remove('show'), 2600);
+  }
+
+  function showGroup(name) {
+    [...tabsEl.children].forEach(t => t.setAttribute('aria-selected', t.dataset.name === name));
+    paletteEl.className = 'palette' + (name === 'Formulas' || name === 'Units' ? ' formulas' : '');
+    paletteEl.innerHTML = '';
+    for (const [label, latex, title] of GROUPS[name]) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = label;
+      b.title = title || latex;
+      b.addEventListener('mousedown', e => e.preventDefault()); // keep caret in the editor
+      b.addEventListener('click', () => {
+        if (name === 'Formulas') mf.value = latex;
+        else mf.insert(latex, { selectionMode: 'placeholder', focus: true });
+        mf.focus();
+        update();
+      });
+      paletteEl.appendChild(b);
+    }
+  }
+  for (const name of Object.keys(GROUPS)) {
+    const t = document.createElement('button');
+    t.className = 'tab'; t.type = 'button'; t.role = 'tab'; t.dataset.name = name; t.textContent = name;
+    t.addEventListener('click', () => showGroup(name));
+    tabsEl.appendChild(t);
+  }
+  showGroup('Structures');
+
+  // ---------- LaTeX cleanup (MathLive -> MathJax) ----------
+  function cleanLatex(s) {
+    return (s || '')
+      .replace(/\\placeholder(\[[^\]]*\])?\{[^{}]*\}/g, '')
+      .replace(/\\mleft/g, '\\left').replace(/\\mright/g, '\\right')
+      .replace(/\\differentialD/g, '\\mathrm{d}')
+      .replace(/\\exponentialE/g, '\\mathrm{e}')
+      .replace(/\\imaginaryI/g, '\\mathrm{i}')
+      .trim();
+  }
+  function currentLatex() {
+    return cleanLatex(mf.getValue ? mf.getValue('latex-expanded') : mf.value);
+  }
+
+  // ---------- SVG rendering ----------
+  function buildSvg(latex, color, fontPx) {
+    const node = MathJax.tex2svg(latex, { display: true });
+    const svg = node.querySelector('svg');
+    const errNode = svg.querySelector('[data-mjx-error]');
+    if (errNode) throw new Error(errNode.getAttribute('data-mjx-error'));
+    const [x, y, w, h] = svg.getAttribute('viewBox').split(/\s+/).map(Number);
+    const pad = 80; // 1/1000 em units; keeps edges from being clipped
+    const vb = [x - pad, y - pad, w + 2 * pad, h + 2 * pad];
+    const pxW = vb[2] / 1000 * fontPx, pxH = vb[3] / 1000 * fontPx;
+    svg.setAttribute('viewBox', vb.join(' '));
+    svg.setAttribute('width', pxW.toFixed(2));
+    svg.setAttribute('height', pxH.toFixed(2));
+    svg.removeAttribute('style');
+    svg.removeAttribute('role');
+    svg.removeAttribute('focusable');
+    svg.removeAttribute('aria-hidden');
+    svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    svg.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+    let str = new XMLSerializer().serializeToString(svg)
+      .replace(/currentColor/g, color)
+      .replace(/ style=""/g, '');
+    // Embed the LaTeX so it can be recovered later.
+    const esc = latex.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    str = str.replace(/^(<svg[^>]*>)/, `$1<title>${esc}</title>`);
+    return { svg: '<?xml version="1.0" encoding="UTF-8"?>\n' + str, width: pxW, height: pxH };
+  }
+
+  let last = null;
+  function update(fromTextarea) {
+    const latex = fromTextarea ? cleanLatex(latexBox.value) : currentLatex();
+    if (!fromTextarea && document.activeElement !== latexBox) latexBox.value = latex;
+    if (!window.MathJax || !MathJax.tex2svg) return;
+    if (!latex) {
+      last = null;
+      preview.innerHTML = '<span class="empty">Your equation will appear here.</span>';
+      return;
+    }
+    try {
+      last = { latex, ...buildSvg(latex, colorIn.value, +sizeIn.value) };
+      preview.innerHTML = last.svg.replace(/^<\?xml[^>]*>\s*/, '');
+    } catch (e) {
+      last = null;
+      preview.innerHTML = '';
+      const span = document.createElement('span');
+      span.className = 'err';
+      span.textContent = 'Can’t render this yet: ' + e.message;
+      preview.appendChild(span);
+    }
+  }
+
+  async function pngBlob() {
+    const scale = +scaleIn.value;
+    const img = new Image();
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(last.svg);
+    await img.decode();
+    const c = document.createElement('canvas');
+    c.width = Math.ceil(last.width * scale);
+    c.height = Math.ceil(last.height * scale);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    return new Promise((res, rej) => c.toBlob(b => b ? res(b) : rej(new Error('PNG failed')), 'image/png'));
+  }
+
+  function fileName(ext) {
+    const base = last.latex.replace(/\\[a-zA-Z]+/g, '').replace(/[^a-zA-Z0-9=]+/g, '').slice(0, 30) || 'equation';
+    return `equation-${base.replace(/=/g, '-eq-')}.${ext}`;
+  }
+  function download(blob, name) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  }
+  function needEq() {
+    if (!last) { toast('Type an equation first.'); return false; }
+    remember(last.latex);
+    return true;
+  }
+
+  document.getElementById('dlSvg').addEventListener('click', () => {
+    if (!needEq()) return;
+    download(new Blob([last.svg], { type: 'image/svg+xml' }), fileName('svg'));
+  });
+  document.getElementById('dlPng').addEventListener('click', async () => {
+    if (!needEq()) return;
+    download(await pngBlob(), fileName('png'));
+  });
+  document.getElementById('copyPng').addEventListener('click', async () => {
+    if (!needEq()) return;
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob() })]);
+      toast('Copied! Click your slide and press Ctrl+V (⌘+V on Mac).');
+    } catch (e) {
+      toast('This browser blocked copying images. Use Download PNG instead.');
+    }
+  });
+  document.getElementById('copyLatex').addEventListener('click', async () => {
+    if (!needEq()) return;
+    try { await navigator.clipboard.writeText(last.latex); toast('LaTeX copied.'); }
+    catch { toast('Could not copy.'); }
+  });
+
+  // ---------- Recent equations ----------
+  const KEY = 'equation-maker-history';
+  function loadHistory() { try { return JSON.parse(localStorage.getItem(KEY)) || []; } catch { return []; } }
+  function saveHistory(h) { try { localStorage.setItem(KEY, JSON.stringify(h)); } catch {} }
+  function remember(latex) {
+    const h = loadHistory().filter(x => x !== latex);
+    h.unshift(latex);
+    saveHistory(h.slice(0, 24));
+    renderHistory();
+  }
+  function renderHistory() {
+    const h = loadHistory();
+    const panel = document.getElementById('historyPanel');
+    const box = document.getElementById('history');
+    panel.hidden = !h.length || !window.MathJax || !MathJax.tex2svg;
+    box.innerHTML = '';
+    for (const latex of h) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.title = latex;
+      try { b.innerHTML = buildSvg(latex, '#1d2330', 24).svg.replace(/^<\?xml[^>]*>\s*/, ''); }
+      catch { b.textContent = latex; }
+      b.addEventListener('click', () => { mf.value = latex; update(); mf.focus(); });
+      box.appendChild(b);
+    }
+  }
+  document.getElementById('clearHistory').addEventListener('click', () => { saveHistory([]); renderHistory(); });
+
+  // ---------- Wiring ----------
+  mf.addEventListener('input', () => update());
+  latexBox.addEventListener('input', () => { mf.value = latexBox.value; update(true); });
+  colorIn.addEventListener('input', () => update());
+  sizeIn.addEventListener('change', () => update());
+
+  window.addEventListener('load', () => {
+    MathJax.startup.promise.then(() => {
+      if (window.mathVirtualKeyboard) mf.mathVirtualKeyboardPolicy = 'auto';
+      mf.smartFence = true;
+      if (!mf.value) mf.value = 'KE=\\frac{1}{2}mv^{2}';
+      update();
+      renderHistory();
+      mf.focus();
+    });
+  });
+})();
+</script>
+</body>
+</html>
